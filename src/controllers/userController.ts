@@ -1,15 +1,14 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import pool from "../db/db";
 
-// Registro de usuário
 export const registerUser = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   const { name, dateOfBirth, email, password } = req.body;
   try {
-    // Verifique se o usuário já existe
     const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [
       email,
     ]);
@@ -18,10 +17,8 @@ export const registerUser = async (
       return;
     }
 
-    // Criptografe a senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Crie um novo usuário
     await pool.query(
       "INSERT INTO users (name, date_of_birth, email, password) VALUES (?, ?, ?, ?)",
       [name, dateOfBirth, email, hashedPassword]
@@ -33,11 +30,9 @@ export const registerUser = async (
   }
 };
 
-// Login de usuário
 export const loginUser = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
   try {
-    // Verifique se o usuário existe
     const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [
       email,
     ]);
@@ -48,14 +43,21 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
     const user = (rows as any[])[0];
 
-    // Verifique a senha
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       res.status(400).json({ message: "Credenciais inválidas" });
       return;
     }
 
-    res.status(200).json({ message: "Login bem-sucedido" });
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET as string,
+      {
+        expiresIn: "1h",
+      }
+    );
+
+    res.status(200).json({ message: "Login bem-sucedido", token });
   } catch (error) {
     res.status(500).json({ message: "Erro ao fazer login", error });
   }
